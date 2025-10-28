@@ -7,8 +7,8 @@ screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
 -- Main Frame (iOS style)
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 400, 0, 450)
-mainFrame.Position = UDim2.new(0.5, -200, 0.5, -225)
+mainFrame.Size = UDim2.new(0, 400, 0, 480)
+mainFrame.Position = UDim2.new(0.5, -200, 0.5, -240)
 mainFrame.BackgroundColor3 = Color3.fromRGB(28, 28, 30)
 mainFrame.BorderSizePixel = 0
 mainFrame.ClipsDescendants = true
@@ -101,10 +101,64 @@ playlistPadding.PaddingLeft = UDim.new(0, 10)
 playlistPadding.PaddingRight = UDim.new(0, 10)
 playlistPadding.Parent = playlistContainer
 
+-- Progress Bar Container
+local progressContainer = Instance.new("Frame")
+progressContainer.Size = UDim2.new(1, -40, 0, 50)
+progressContainer.Position = UDim2.new(0, 20, 0, 360)
+progressContainer.BackgroundTransparency = 1
+progressContainer.Parent = mainFrame
+
+-- Time Label (Current)
+local currentTimeLabel = Instance.new("TextLabel")
+currentTimeLabel.Size = UDim2.new(0, 50, 0, 20)
+currentTimeLabel.Position = UDim2.new(0, 0, 0, 0)
+currentTimeLabel.BackgroundTransparency = 1
+currentTimeLabel.Text = "0:00"
+currentTimeLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+currentTimeLabel.TextSize = 12
+currentTimeLabel.Font = Enum.Font.Gotham
+currentTimeLabel.TextXAlignment = Enum.TextXAlignment.Left
+currentTimeLabel.Parent = progressContainer
+
+-- Time Label (Total)
+local totalTimeLabel = Instance.new("TextLabel")
+totalTimeLabel.Size = UDim2.new(0, 50, 0, 20)
+totalTimeLabel.Position = UDim2.new(1, -50, 0, 0)
+totalTimeLabel.BackgroundTransparency = 1
+totalTimeLabel.Text = "0:00"
+totalTimeLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+totalTimeLabel.TextSize = 12
+totalTimeLabel.Font = Enum.Font.Gotham
+totalTimeLabel.TextXAlignment = Enum.TextXAlignment.Right
+totalTimeLabel.Parent = progressContainer
+
+-- Progress Bar Background
+local progressBg = Instance.new("Frame")
+progressBg.Size = UDim2.new(1, -110, 0, 6)
+progressBg.Position = UDim2.new(0, 55, 0, 7)
+progressBg.BackgroundColor3 = Color3.fromRGB(58, 58, 60)
+progressBg.BorderSizePixel = 0
+progressBg.Parent = progressContainer
+
+local progressBgCorner = Instance.new("UICorner")
+progressBgCorner.CornerRadius = UDim.new(1, 0)
+progressBgCorner.Parent = progressBg
+
+-- Progress Bar Fill
+local progressFill = Instance.new("Frame")
+progressFill.Size = UDim2.new(0, 0, 1, 0)
+progressFill.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
+progressFill.BorderSizePixel = 0
+progressFill.Parent = progressBg
+
+local progressFillCorner = Instance.new("UICorner")
+progressFillCorner.CornerRadius = UDim.new(1, 0)
+progressFillCorner.Parent = progressFill
+
 -- Control Buttons Container
 local controlsContainer = Instance.new("Frame")
 controlsContainer.Size = UDim2.new(1, -40, 0, 80)
-controlsContainer.Position = UDim2.new(0, 20, 0, 360)
+controlsContainer.Position = UDim2.new(0, 20, 0, 390)
 controlsContainer.BackgroundTransparency = 1
 controlsContainer.Parent = mainFrame
 
@@ -172,7 +226,7 @@ local stopCorner = Instance.new("UICorner")
 stopCorner.CornerRadius = UDim.new(0, 8)
 stopCorner.Parent = stopButton
 
-
+-- Playlist Data (Multiple URLs)
 local playlist = {
 	{name = "Di Antara aku dan kau", url = "https://github.com/rebelscodeee-max/Kumpulan-Mp3/raw/main/Tenxi%2C%20suisei%20%26%20Jemsii%20-%20mejikuhibiniu%20(Lyrics).mp3"},
     {name = "Pica", url = "https://github.com/rebelscodeee-max/Kumpulan-Mp3/raw/main/pica.mp3"},
@@ -181,8 +235,38 @@ local playlist = {
 local currentTrack = 1
 local sound = nil
 local isMinimized = false
+local updateConnection = nil
 
+-- Function to format time
+local function formatTime(seconds)
+    local mins = math.floor(seconds / 60)
+    local secs = math.floor(seconds % 60)
+    return string.format("%d:%02d", mins, secs)
+end
 
+-- Function to update progress bar
+local function updateProgressBar()
+    if sound and sound.IsPlaying then
+        local currentTime = sound.TimePosition
+        local totalTime = sound.TimeLength
+        
+        if totalTime > 0 then
+            local progress = currentTime / totalTime
+            progressFill:TweenSize(
+                UDim2.new(progress, 0, 1, 0),
+                Enum.EasingDirection.Out,
+                Enum.EasingStyle.Linear,
+                0.1,
+                true
+            )
+            
+            currentTimeLabel.Text = formatTime(currentTime)
+            totalTimeLabel.Text = formatTime(totalTime)
+        end
+    end
+end
+
+-- Function to create playlist item
 local function createPlaylistItem(index, trackData)
     local item = Instance.new("Frame")
     item.Size = UDim2.new(1, -10, 0, 50)
@@ -245,11 +329,19 @@ function playTrack(index)
     
     local trackData = playlist[index]
     
-    -- Stop existing sound
+    -- Stop existing sound and update connection
     if sound then
         sound:Stop()
         sound:Destroy()
     end
+    if updateConnection then
+        updateConnection:Disconnect()
+    end
+    
+    -- Reset progress bar
+    progressFill.Size = UDim2.new(0, 0, 1, 0)
+    currentTimeLabel.Text = "0:00"
+    totalTimeLabel.Text = "0:00"
     
     -- Create new sound
     sound = Instance.new("Sound")
@@ -263,9 +355,19 @@ function playTrack(index)
         sound.Looped = false
         sound.Parent = game.Players.LocalPlayer.Character:WaitForChild("Head")
         sound:Play()
+        
+        -- Wait for sound to load
+        sound.Loaded:Wait()
+        totalTimeLabel.Text = formatTime(sound.TimeLength)
+        
         titleLabel.Text = "🎵 Playing: " .. trackData.name
         titleLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
         playButton.Text = "⏸ Pause"
+        
+        -- Start progress bar update loop
+        updateConnection = game:GetService("RunService").Heartbeat:Connect(function()
+            updateProgressBar()
+        end)
     end)
     
     if not success then
@@ -279,9 +381,15 @@ function playTrack(index)
     -- Auto play next when finished
     if sound then
         sound.Ended:Connect(function()
+            if updateConnection then
+                updateConnection:Disconnect()
+            end
             if currentTrack < #playlist then
                 currentTrack = currentTrack + 1
                 playTrack(currentTrack)
+            else
+                playButton.Text = "▶ Play"
+                progressFill.Size = UDim2.new(0, 0, 1, 0)
             end
         end)
     end
@@ -407,7 +515,7 @@ minimizeBtn.MouseButton1Click:Connect(function()
         mainFrame:TweenSize(UDim2.new(0, 400, 0, 50), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.3, true)
         minimizeBtn.Text = "+"
     else
-        mainFrame:TweenSize(UDim2.new(0, 400, 0, 450), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.3, true)
+        mainFrame:TweenSize(UDim2.new(0, 400, 0, 480), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.3, true)
         minimizeBtn.Text = "−"
     end
 end)
@@ -417,6 +525,9 @@ closeBtn.MouseButton1Click:Connect(function()
     if sound then
         sound:Stop()
         sound:Destroy()
+    end
+    if updateConnection then
+        updateConnection:Disconnect()
     end
     screenGui:Destroy()
 end)
